@@ -2,47 +2,49 @@ const fs = require('fs');
 const csv = require('csv-parser');
 const Records = require('./records.model');
 
-// Por performance "lean: true"; evitamos la validación si confiamos en el archivo.
-const insertOptions = { lean: true };
-const ROWS = 200_000;
+/* Por performance "lean: true"; evitamos la validación si confiamos en el archivo. */
+/* CONSTANTS */
+const insertOptions = Object.freeze({ lean: true });
+const ROWS_LIMIT = 200_000;
+/* CONSTANTS */
 
 const upload = async (req, res) => {
     const { file } = req;
 
-    if (!file) { return res.status(400).json({ message: 'Bad request: file missing' }); }
+    if (!file) { return res.status(400).json({ message: 'file missing' }); }
 
     try {
         await new Promise((resolve) => {
-            let arr = [];
+            let dataArray = [];
             const stream = fs.createReadStream(file.path).pipe(csv());
 
             stream.on('data', async (data) => {
-                arr.push(data);
+                dataArray.push(data);
 
                 /* Insertamos data en cantidades limitadas
                 para evitar 'heap limit' error, en archivos grandes */
-                if (arr.length === ROWS) {
+                if (dataArray.length === ROWS_LIMIT) {
                     stream.pause();
-                    await Records.insertMany(arr, insertOptions);
-                    arr = [];
+                    await Records.insertMany(dataArray, insertOptions);
+                    dataArray = [];
                     stream.resume();
                 }
             });
 
             stream.on('end', async () => {
-                await Records.insertMany(arr, insertOptions);
+                await Records.insertMany(dataArray, insertOptions);
                 resolve();
             });
 
             stream.on('error', (err) => { throw err; });
         });
 
-        return res.status(200).json({ message: 'OK' });
+        return res.status(200).json({ message: 'Ok' });
     } catch (error) {
         return res.status(400).json({ message: error.message });
     } finally {
-        // removemos el archivo sin importar el resultado
-        fs.unlink(file.path, (err) => { if (err) throw err; });
+        /* Removemos el archivo sin importar el resultado */
+        fs.unlink(file.path, (err) => { if (err) { console.log(err); } });
     }
 };
 
