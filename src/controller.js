@@ -32,7 +32,7 @@ const upload = async (req, res) => {
 
             stream.on('data', async (data) => {
                 docsArray.push(data);
-                /* Por escalabilidad leemos datos en cantidades limitadas para evitar el error
+                /* Por escalabilidad procesamos datos en cantidades limitadas para evitar el error
         'heap limit' en archivos grandes; Ajustable si se necesita trabajar usando menos memoria. */
                 if (docsArray.length === 100_000) {
                     stream.pause();
