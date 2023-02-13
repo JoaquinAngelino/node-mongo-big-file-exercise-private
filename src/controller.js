@@ -1,30 +1,22 @@
 const fs = require('fs');
 const csv = require('csv-parser');
 const Records = require('./records.model');
-/**
- *  1 - parallelInsert: se divide la carga de trabajo en varios hilos o procesos,
- *      lo que permite realizar varias operaciones de inserción al mismo tiempo.
- *
- *  2 - insert options: podemos configurar las opciones de inserción para extra
- *      performance evitando validaciónes/checkeos -No recomendable-.
- *
- *  3 - Leemos data en cantidades limitadas para evitar el error 'heap limit' en archivos grandes;
- *      Ajustable si se necesita trabajar usando menos memoria.
- *
- *  4 - Eliminamos el archivo independientemente del resultado usando la clausula finally.
-*/
 
-const parallelInsert = async (docsArray) => { // * 1 *
-    const SLICE = 20_000;
+/* parallelInsert: divide la carga de trabajo en 5 hilos o procesos,
+mejora la performance de inserción al realizar varias operaciones al mismo tiempo, */
+const parallelInsert = async (docsArray) => {
+    const SIZE = 20_000;
     const promiseArray = [];
-    for (let i = 1; i < 6; i += 1) {
-        const docs = docsArray.slice(SLICE * (i - 1), SLICE * i);
-        promiseArray.push(Records.insertMany(docs, ({ // * 2 *
+
+    for (let i = 0; i < 5; i += 1) {
+        const docs = docsArray.slice(SIZE * i, SIZE * (i + 1));
+        promiseArray.push(Records.insertMany(docs, ({
             lean: true,
             ordered: false,
             // writeConcern: { w: 0, j: false },
         })));
     }
+
     await Promise.all(promiseArray);
 };
 
@@ -40,7 +32,9 @@ const upload = async (req, res) => {
 
             stream.on('data', async (data) => {
                 docsArray.push(data);
-                if (docsArray.length === 100_000) { // * 3 *
+                /* Por escalabilidad leemos datos en cantidades limitadas para evitar el error
+        'heap limit' en archivos grandes; Ajustable si se necesita trabajar usando menos memoria. */
+                if (docsArray.length === 100_000) {
                     stream.pause();
                     await parallelInsert(docsArray);
                     docsArray = [];
@@ -60,7 +54,8 @@ const upload = async (req, res) => {
     } catch (error) {
         return res.status(500).json({ message: error.message });
     } finally {
-        fs.unlink(file.path, () => { }); // * 4 *
+        /* Eliminamos el archivo independientemente del resultado usando la cláusula finally. */
+        fs.unlink(file.path, () => { });
     }
 };
 
