@@ -5,16 +5,13 @@ const Records = require('./records.model');
 /* parallelInsert: divide la carga de trabajo en 5 hilos o procesos,
 mejora la performance de inserción al realizar varias operaciones al mismo tiempo, */
 const parallelInsert = async (docsArray) => {
-    const SIZE = 20_000;
     const promiseArray = [];
+    const SLICE = Math.ceil(docsArray.length / 5);
+    const insertOptions = { lean: true, ordered: false };
 
     for (let i = 0; i < 5; i += 1) {
-        const docs = docsArray.slice(SIZE * i, SIZE * (i + 1));
-        promiseArray.push(Records.insertMany(docs, ({
-            lean: true,
-            ordered: false,
-            // writeConcern: { w: 0, j: false },
-        })));
+        const docs = docsArray.slice(SLICE * i, SLICE * (i + 1));
+        promiseArray.push(Records.insertMany(docs, insertOptions));
     }
 
     await Promise.all(promiseArray);
@@ -27,14 +24,15 @@ const upload = async (req, res) => {
 
     try {
         await new Promise((resolve) => {
-            let docsArray = [];
+            const MAX_DOCS = 100_000;
             const stream = fs.createReadStream(file.path).pipe(csv());
+            let docsArray = [];
 
             stream.on('data', async (data) => {
                 docsArray.push(data);
                 /* Por escalabilidad procesamos datos en cantidades limitadas para evitar el error
         'heap limit' en archivos grandes; Ajustable si se necesita trabajar usando menos memoria. */
-                if (docsArray.length === 100_000) {
+                if (docsArray.length === MAX_DOCS) {
                     stream.pause();
                     await parallelInsert(docsArray);
                     docsArray = [];
