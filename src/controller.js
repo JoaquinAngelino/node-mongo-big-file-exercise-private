@@ -1,4 +1,4 @@
-const fs = require('fs');
+const fs = require('fs/promises');
 const csv = require('csv-parser');
 const Records = require('./records.model');
 
@@ -23,12 +23,12 @@ const upload = async (req, res) => {
     if (!file) { return res.status(400).json({ message: 'File missing' }); }
 
     try {
-        await new Promise((resolve) => {
-            const MAX_DOCS = 100_000;
-            const stream = fs.createReadStream(file.path).pipe(csv());
-            let docsArray = [];
+        const MAX_DOCS = 100_000;
+        const stream = fs.createReadStream(file.path).pipe(csv());
+        let docsArray = [];
+        fs
 
-            stream.on('data', async (data) => {
+        .stream.on('data', async (data) => {
                 docsArray.push(data);
                 /* Por escalabilidad procesamos datos en cantidades limitadas para evitar el error
         'heap limit' en archivos grandes; Ajustable si se necesita trabajar usando menos memoria. */
@@ -40,13 +40,11 @@ const upload = async (req, res) => {
                 }
             });
 
-            stream.on('end', async () => {
-                await parallelInsert(docsArray);
-                resolve();
-            });
-
-            stream.on('error', (err) => { throw err; });
+        stream.on('end', async () => {
+            await parallelInsert(docsArray);
         });
+
+        stream.on('error', (err) => { throw err; });
 
         return res.status(200).json({ message: 'Documents inserted correctly' });
     } catch (error) {
